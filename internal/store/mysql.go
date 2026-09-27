@@ -65,11 +65,22 @@ func (r *MySQLRepository) CreateBatch(ctx context.Context, batch *BatchOrder, it
 				valueArgs = append(valueArgs, batchID, item.SequenceNo, item.IdempotencyKey, ItemStatusPending, now, now)
 			}
 
-			stmt := fmt.Sprintf("INSERT INTO batch_order_items (batch_id, sequence_no, idempotency_key, status, created_at, updated_at) VALUES %s",
+						stmt := fmt.Sprintf("INSERT INTO batch_order_items (batch_id, sequence_no, idempotency_key, status, created_at, updated_at) VALUES %s",
 				strings.Join(valueStrings, ","))
 
-			if _, err := tx.ExecContext(ctx, stmt, valueArgs...); err != nil {
+			res, err := tx.ExecContext(ctx, stmt, valueArgs...)
+			if err != nil {
 				return 0, fmt.Errorf("failed to insert batch_order_items chunk: %w", err)
+			}
+
+			firstID, err := res.LastInsertId()
+			if err != nil {
+				return 0, fmt.Errorf("failed to get last insert id for items chunk: %w", err)
+			}
+
+			// MySQL AUTO_INCREMENT pada multi-row insert dijamin berurutan dalam satu statement
+			for idx, item := range chunk {
+				item.ID = firstID + int64(idx)
 			}
 		}
 	}

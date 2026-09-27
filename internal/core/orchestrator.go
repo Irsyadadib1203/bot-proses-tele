@@ -139,7 +139,9 @@ func (o *Orchestrator) processItemSafely(workerID int, job *batchItemJob) {
 
 			// Update item to failed upon panic so it is not stuck indefinitely
 			errCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			_ = o.repo.UpdateItemResult(errCtx, job.Item.ID, store.ItemStatusFailed, "", "", fmt.Sprintf("panic in worker: %v", r))
+			if err := o.repo.UpdateItemResult(errCtx, job.Item.ID, store.ItemStatusFailed, "", "", fmt.Sprintf("panic in worker: %v", r)); err != nil {
+				o.logger.Error("failed to persist panic item result", "item_id", job.Item.ID, "err", err)
+			}
 			cancel()
 		}
 		close(job.DoneCh)
@@ -195,7 +197,9 @@ func (o *Orchestrator) processItemSafely(workerID int, job *batchItemJob) {
 			"idempotency_key", item.IdempotencyKey,
 			"error", errMsg,
 		)
-		_ = o.repo.UpdateItemResult(dbSaveCtx, item.ID, store.ItemStatusFailed, res.SN, res.ProviderRef, errMsg)
+		if err := o.repo.UpdateItemResult(dbSaveCtx, item.ID, store.ItemStatusFailed, res.SN, res.ProviderRef, errMsg); err != nil {
+			o.logger.Error("failed to persist failed item result", "batch_id", batch.ID, "item_id", item.ID, "err", err)
+		}
 	} else {
 		o.logger.Info("order item succeeded",
 			"batch_id", batch.ID,
@@ -203,7 +207,9 @@ func (o *Orchestrator) processItemSafely(workerID int, job *batchItemJob) {
 			"idempotency_key", item.IdempotencyKey,
 			"sn", res.SN,
 		)
-		_ = o.repo.UpdateItemResult(dbSaveCtx, item.ID, store.ItemStatusSuccess, res.SN, res.ProviderRef, "")
+		if err := o.repo.UpdateItemResult(dbSaveCtx, item.ID, store.ItemStatusSuccess, res.SN, res.ProviderRef, ""); err != nil {
+			o.logger.Error("failed to persist success item result", "batch_id", batch.ID, "item_id", item.ID, "err", err)
+		}
 	}
 }
 
