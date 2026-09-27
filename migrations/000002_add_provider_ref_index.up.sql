@@ -1,0 +1,1 @@
+ALTER TABLE batch_order_items ADD INDEX idx_provider_ref (provider_ref);

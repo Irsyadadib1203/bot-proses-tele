@@ -1,0 +1,1 @@
+ALTER TABLE batch_order_items DROP INDEX idx_provider_ref;

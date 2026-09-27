@@ -5,6 +5,7 @@ import "context"
 const (
 	OrderStatusSuccess = "success"
 	OrderStatusFailed  = "failed"
+	OrderStatusPending = "pending"
 )
 
 // PlaceOrderRequest contains the parameters required to place an individual order item.

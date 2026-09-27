@@ -11,11 +11,12 @@ import (
 )
 
 type Config struct {
-	Telegram TelegramConfig            `yaml:"telegram"`
-	Target   TargetConfig              `yaml:"target"`
-	Database DatabaseConfig            `yaml:"database"`
-	Worker   WorkerConfig              `yaml:"worker"`
-	Products map[string]string         `yaml:"products"`
+	Telegram    TelegramConfig    `yaml:"telegram"`
+	Target      TargetConfig      `yaml:"target"`
+	Database    DatabaseConfig    `yaml:"database"`
+	Worker      WorkerConfig      `yaml:"worker"`
+	Products    map[string]string `yaml:"products"`
+	WebhookPort string            `yaml:"webhook_port"`
 }
 
 type TelegramConfig struct {
@@ -25,10 +26,11 @@ type TelegramConfig struct {
 }
 
 type TargetConfig struct {
-	BaseURL   string `yaml:"base_url"`
-	APIKey    string `yaml:"api_key"`
-	APISecret string `yaml:"api_secret"`
-	TimeoutMs int    `yaml:"timeout_ms"`
+	BaseURL     string `yaml:"base_url"`
+	APIKey      string `yaml:"api_key"`
+	APISecret   string `yaml:"api_secret"`
+	CallbackURL string `yaml:"callback_url"`
+	TimeoutMs   int    `yaml:"timeout_ms"`
 }
 
 type DatabaseConfig struct {
@@ -77,7 +79,8 @@ func LoadConfig(yamlPath string) (*Config, error) {
 			MaxIdleConns:    10,
 			ConnMaxLifetime: 300,
 		},
-		Products: make(map[string]string),
+		Products:    make(map[string]string),
+		WebhookPort: "8080",
 	}
 
 	if yamlPath != "" {
@@ -105,6 +108,11 @@ func LoadConfig(yamlPath string) (*Config, error) {
 	}
 	if apiSecret := os.Getenv("TARGET_API_SECRET"); apiSecret != "" {
 		cfg.Target.APISecret = apiSecret
+	}
+	if cbURL := os.Getenv("TARGET_CALLBACK_URL"); cbURL != "" {
+		cfg.Target.CallbackURL = cbURL
+	} else if cbURL := os.Getenv("CALLBACK_URL"); cbURL != "" {
+		cfg.Target.CallbackURL = cbURL
 	}
 
 	if host := os.Getenv("DB_HOST"); host != "" {
@@ -135,6 +143,10 @@ func LoadConfig(yamlPath string) (*Config, error) {
 		if c, err := strconv.Atoi(concurrency); err == nil && c > 0 {
 			cfg.Worker.Concurrency = c
 		}
+	}
+
+	if port := os.Getenv("WEBHOOK_PORT"); port != "" {
+		cfg.WebhookPort = port
 	}
 
 	return cfg, nil

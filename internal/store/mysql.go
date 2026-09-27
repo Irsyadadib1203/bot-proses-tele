@@ -202,6 +202,52 @@ func (r *MySQLRepository) UpdateItemStatus(ctx context.Context, itemID int64, st
 	return nil
 }
 
+func (r *MySQLRepository) UpdateItemProviderRef(ctx context.Context, itemID int64, providerRef string) error {
+	var refVal sql.NullString
+	if providerRef != "" {
+		refVal = sql.NullString{String: providerRef, Valid: true}
+	}
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE batch_order_items SET provider_ref = ?, updated_at = ? WHERE id = ?
+	`, refVal, time.Now(), itemID)
+	if err != nil {
+		return fmt.Errorf("failed to update item provider_ref: %w", err)
+	}
+	return nil
+}
+
+func (r *MySQLRepository) GetItemByProviderRef(ctx context.Context, providerRef string) (*BatchOrderItem, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, batch_id, sequence_no, idempotency_key, sn, provider_ref, status, error_message, created_at, updated_at
+		FROM batch_order_items WHERE provider_ref = ? AND status = ? LIMIT 1
+	`, providerRef, ItemStatusInProgress)
+
+	var it BatchOrderItem
+	if err := row.Scan(&it.ID, &it.BatchID, &it.SequenceNo, &it.IdempotencyKey, &it.SN, &it.ProviderRef, &it.Status, &it.ErrorMessage, &it.CreatedAt, &it.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get item by provider_ref: %w", err)
+	}
+	return &it, nil
+}
+
+func (r *MySQLRepository) GetItemByIdempotencyKey(ctx context.Context, idempotencyKey string) (*BatchOrderItem, error) {
+	row := r.db.QueryRowContext(ctx, `
+		SELECT id, batch_id, sequence_no, idempotency_key, sn, provider_ref, status, error_message, created_at, updated_at
+		FROM batch_order_items WHERE idempotency_key = ? AND status = ? LIMIT 1
+	`, idempotencyKey, ItemStatusInProgress)
+
+	var it BatchOrderItem
+	if err := row.Scan(&it.ID, &it.BatchID, &it.SequenceNo, &it.IdempotencyKey, &it.SN, &it.ProviderRef, &it.Status, &it.ErrorMessage, &it.CreatedAt, &it.UpdatedAt); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get item by idempotency_key: %w", err)
+	}
+	return &it, nil
+}
+
 func (r *MySQLRepository) UpdateItemResult(ctx context.Context, itemID int64, status, sn, providerRef, errorMsg string) error {
 	var snVal, refVal, errVal sql.NullString
 	if sn != "" {

@@ -200,6 +200,20 @@ func (o *Orchestrator) processItemSafely(workerID int, job *batchItemJob) {
 		if err := o.repo.UpdateItemResult(dbSaveCtx, item.ID, store.ItemStatusFailed, res.SN, res.ProviderRef, errMsg); err != nil {
 			o.logger.Error("failed to persist failed item result", "batch_id", batch.ID, "item_id", item.ID, "err", err)
 		}
+	} else if res.Status == OrderStatusPending {
+		// Provider returned PENDING: save provider_ref and wait for async webhook callback
+		o.logger.Info("order item pending callback",
+			"batch_id", batch.ID,
+			"seq", item.SequenceNo,
+			"idempotency_key", item.IdempotencyKey,
+			"provider_ref", res.ProviderRef,
+		)
+		// Update provider_ref while keeping item in 'in_progress' status
+		if err := o.repo.UpdateItemProviderRef(dbSaveCtx, item.ID, res.ProviderRef); err != nil {
+			o.logger.Error("failed to persist pending item provider_ref", "batch_id", batch.ID, "item_id", item.ID, "err", err)
+		}
+		// Dispatch is complete from worker perspective; batch will finalize when webhook arrives
+		return
 	} else {
 		o.logger.Info("order item succeeded",
 			"batch_id", batch.ID,
@@ -211,6 +225,11 @@ func (o *Orchestrator) processItemSafely(workerID int, job *batchItemJob) {
 			o.logger.Error("failed to persist success item result", "batch_id", batch.ID, "item_id", item.ID, "err", err)
 		}
 	}
+}
+
+// CheckAndFinalizeBatch checks if all items in a batch are completed and triggers onCompleted callback if so.
+func (o *Orchestrator) CheckAndFinalizeBatch(ctx context.Context, batchID int64) {
+	o.finalizeBatchIfDone(ctx, batchID)
 }
 
 func (o *Orchestrator) finalizeBatchIfDone(ctx context.Context, batchID int64) {

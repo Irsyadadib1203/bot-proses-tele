@@ -27,6 +27,15 @@ type Repository interface {
 	// UpdateItemStatus updates the status of an item (e.g. to in_progress or needs_manual_review).
 	UpdateItemStatus(ctx context.Context, itemID int64, status string) error
 
+	// UpdateItemProviderRef updates the provider_ref of an item without altering its status.
+	UpdateItemProviderRef(ctx context.Context, itemID int64, providerRef string) error
+
+	// GetItemByProviderRef retrieves an in_progress item matching the given provider_ref.
+	GetItemByProviderRef(ctx context.Context, providerRef string) (*BatchOrderItem, error)
+
+	// GetItemByIdempotencyKey retrieves an in_progress item matching the given idempotency_key.
+	GetItemByIdempotencyKey(ctx context.Context, idempotencyKey string) (*BatchOrderItem, error)
+
 	// UpdateItemResult updates the final result of an item (status, sn, provider_ref, error_message).
 	UpdateItemResult(ctx context.Context, itemID int64, status, sn, providerRef, errorMsg string) error
 

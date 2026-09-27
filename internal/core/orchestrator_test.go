@@ -99,11 +99,52 @@ func (m *mockRepo) UpdateItemStatus(ctx context.Context, itemID int64, status st
 	return nil
 }
 
+func (m *mockRepo) UpdateItemProviderRef(ctx context.Context, itemID int64, providerRef string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if it, ok := m.items[itemID]; ok {
+		it.ProviderRef.String = providerRef
+		it.ProviderRef.Valid = providerRef != ""
+		m.states = append(m.states, fmt.Sprintf("%d:provider_ref:%s", itemID, providerRef))
+	}
+	return nil
+}
+
+func (m *mockRepo) GetItemByProviderRef(ctx context.Context, providerRef string) (*store.BatchOrderItem, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, it := range m.items {
+		if it.ProviderRef.Valid && it.ProviderRef.String == providerRef && it.Status == store.ItemStatusInProgress {
+			return it, nil
+		}
+	}
+	return nil, nil
+}
+
+func (m *mockRepo) GetItemByIdempotencyKey(ctx context.Context, idempotencyKey string) (*store.BatchOrderItem, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, it := range m.items {
+		if it.IdempotencyKey == idempotencyKey && it.Status == store.ItemStatusInProgress {
+			return it, nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *mockRepo) UpdateItemResult(ctx context.Context, itemID int64, status, sn, providerRef, errorMsg string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if it, ok := m.items[itemID]; ok {
 		it.Status = status
+		if sn != "" {
+			it.SN.String = sn
+			it.SN.Valid = true
+		}
+		if providerRef != "" {
+			it.ProviderRef.String = providerRef
+			it.ProviderRef.Valid = true
+		}
 		m.states = append(m.states, fmt.Sprintf("%d:%s", itemID, status))
 	}
 	return nil
@@ -240,5 +281,78 @@ func TestOrchestratorExecutionAndStatusTransitions(t *testing.T) {
 
 	if !hasInProgress {
 		t.Errorf("expected items to transition to in_progress first, recorded states: %v", states)
+	}
+}
+
+func TestOrchestratorPendingCallbackFlow(t *testing.T) {
+	batch := &store.BatchOrder{
+		ID:             10,
+		TelegramUserID: 111,
+		TelegramChatID: 222,
+		ProductCode:    "ML5",
+		TargetID:       "123456(1234)",
+		Qty:            1,
+		Status:         store.BatchStatusProcessing,
+	}
+
+	items := []*store.BatchOrderItem{
+		{ID: 101, BatchID: 10, SequenceNo: 1, IdempotencyKey: "10-1", Status: store.ItemStatusPending},
+	}
+
+	repo := newMockRepo(batch, items)
+
+	adapter := &mockAdapter{
+		placeOrderFunc: func(ctx context.Context, req PlaceOrderRequest) (OrderResult, error) {
+			return OrderResult{
+				SN:          "INV-PENDING-101",
+				ProviderRef: "INV-PENDING-101",
+				Status:      OrderStatusPending,
+				Message:     "Order in pending state",
+			}, nil
+		},
+	}
+
+	completedCh := make(chan *store.BatchOrder, 1)
+	onCompleted := func(b *store.BatchOrder, its []*store.BatchOrderItem) {
+		completedCh <- b
+	}
+
+	orch := NewOrchestrator(repo, adapter, 1, onCompleted, nil)
+	defer orch.Stop(5 * time.Second)
+
+	orch.EnqueueBatch(batch, items)
+
+	// Item should be in_progress with provider_ref set, NOT completed yet
+	time.Sleep(200 * time.Millisecond)
+
+	repo.mu.Lock()
+	item101 := repo.items[101]
+	currentBatchStatus := repo.batch.Status
+	repo.mu.Unlock()
+
+	if item101.Status != store.ItemStatusInProgress {
+		t.Errorf("item status = %s, want %s", item101.Status, store.ItemStatusInProgress)
+	}
+	if item101.ProviderRef.String != "INV-PENDING-101" {
+		t.Errorf("provider_ref = %s, want INV-PENDING-101", item101.ProviderRef.String)
+	}
+	if currentBatchStatus != store.BatchStatusProcessing {
+		t.Errorf("batch status = %s, want %s (should not be completed yet)", currentBatchStatus, store.BatchStatusProcessing)
+	}
+
+	// Now simulate callback arrival: update item result and trigger CheckAndFinalizeBatch
+	_ = repo.UpdateItemResult(context.Background(), 101, store.ItemStatusSuccess, "INV-PENDING-101", "INV-PENDING-101", "")
+	orch.CheckAndFinalizeBatch(context.Background(), 10)
+
+	select {
+	case completedBatch := <-completedCh:
+		if completedBatch.Status != store.BatchStatusCompleted {
+			t.Errorf("batch status after callback = %s, want %s", completedBatch.Status, store.BatchStatusCompleted)
+		}
+		if completedBatch.SuccessCount != 1 {
+			t.Errorf("success count = %d, want 1", completedBatch.SuccessCount)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for batch finalization after callback")
 	}
 }

@@ -9,6 +9,7 @@ target:
   base_url: "https://api.ffzstore.com/v1"
   api_key: ""
   api_secret: ""
+  callback_url: "https://bot.irxplay.com/webhook/callback"
   timeout_ms: 20000
 
 database:
@@ -25,6 +26,8 @@ worker:
   concurrency: 5
   max_qty_per_batch: 200
   shutdown_timeout_sec: 30
+
+webhook_port: "8080"
 
 # Mapping kode produk bot -> kode produk di API FFZ Store
 products:

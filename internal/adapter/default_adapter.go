@@ -105,6 +105,7 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 		UserID:      userID,
 		ServerID:    serverID,
 		TrxID:       req.IdempotencyKey, // Deterministic Idempotency Key (<batch_id>-<sequence_no>)
+		CallbackURL: a.cfg.CallbackURL,
 	}
 
 	bodyBytes, err := json.Marshal(payload)
@@ -162,6 +163,15 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 				SN:          ffzResp.Data.InvoiceNumber,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusSuccess,
+				Message:     ffzResp.Data.ResponseNote,
+			}, nil
+		}
+
+		if statusUpper == "PENDING" {
+			return core.OrderResult{
+				SN:          ffzResp.Data.InvoiceNumber,
+				ProviderRef: ffzResp.Data.InvoiceNumber,
+				Status:      core.OrderStatusPending,
 				Message:     ffzResp.Data.ResponseNote,
 			}, nil
 		}

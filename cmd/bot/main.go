@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -17,6 +18,7 @@ import (
 	"bot-proses/internal/core"
 	"bot-proses/internal/store"
 	"bot-proses/internal/telegram"
+	"bot-proses/internal/webhook"
 	"bot-proses/migrations"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -104,7 +106,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 6. Resume Interrupted Batches (Recovery on Startup)
+	// 6. Initialize & Start Webhook HTTP Callback Server
+	webhookHandler := webhook.NewWebhookHandler(repo, orchestrator, cfg.Target.APIKey, logger)
+	webhookMux := http.NewServeMux()
+	webhookMux.HandleFunc("/webhook/callback", webhookHandler.HandleCallback)
+
+	webhookPort := cfg.WebhookPort
+	if webhookPort == "" {
+		webhookPort = "8080"
+	}
+
+	webhookServer := &http.Server{
+		Addr:    ":" + webhookPort,
+		Handler: webhookMux,
+	}
+
+	go func() {
+		logger.Info("webhook HTTP callback server listening", "port", webhookPort)
+		if err := webhookServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Error("webhook HTTP callback server error", "err", err)
+		}
+	}()
+
+	// 7. Resume Interrupted Batches (Recovery on Startup)
 	resumeMgr := core.NewResumeManager(repo, productAdapter, orchestrator, logger)
 	ctxResume, cancelResume := context.WithTimeout(context.Background(), 60*time.Second)
 	if err := resumeMgr.ResumeUnfinishedBatches(ctxResume); err != nil {
@@ -112,11 +136,11 @@ func main() {
 	}
 	cancelResume()
 
-	// 7. Start Telegram Bot Polling
+	// 8. Start Telegram Bot Polling
 	botService.Start()
 	logger.Info("system is ready and listening for Telegram commands")
 
-	// 8. Graceful Shutdown Listener
+	// 9. Graceful Shutdown Listener
 	stopSignal := make(chan os.Signal, 1)
 	signal.Notify(stopSignal, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
 
@@ -126,14 +150,21 @@ func main() {
 	// Step A: Stop receiving new Telegram updates
 	botService.Stop()
 
-	// Step B: Stop orchestrator dispatching and wait for in-flight workers to finish HTTP calls & DB saves
+	// Step B: Stop Webhook HTTP Server
+	ctxShutdownWebhook, cancelWebhook := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := webhookServer.Shutdown(ctxShutdownWebhook); err != nil {
+		logger.Error("error shutting down webhook server", "err", err)
+	}
+	cancelWebhook()
+
+	// Step C: Stop orchestrator dispatching and wait for in-flight workers to finish HTTP calls & DB saves
 	shutdownTimeout := time.Duration(cfg.Worker.ShutdownTimeoutSec) * time.Second
 	if shutdownTimeout <= 0 {
 		shutdownTimeout = 30 * time.Second
 	}
 	orchestrator.Stop(shutdownTimeout)
 
-	// Step C: Close database
+	// Step D: Close database
 	if err := db.Close(); err != nil {
 		logger.Error("error closing database", "err", err)
 	}

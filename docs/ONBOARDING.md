@@ -12,8 +12,9 @@ Dokumen ini adalah panduan langkah-demi-langkah bagi pengembang/klien baru untuk
 - [ ] **Langkah 4: Sesuaikan Adapter Provider Target (`internal/adapter`)**
 - [ ] **Langkah 5: Konfigurasi Mapping Produk & Batasan di `config.yaml`**
 - [ ] **Langkah 6: Siapkan Environment Variables (`.env`)**
-- [ ] **Langkah 7: Jalankan Aplikasi (Database Auto-Migrate)**
-- [ ] **Langkah 8: Uji Coba Transaksi & Verifikasi Rekap**
+- [ ] **Langkah 7: Setup Webhook Callback Asynchronous (Provider & Nginx SSL)**
+- [ ] **Langkah 8: Jalankan Aplikasi (Database Auto-Migrate)**
+- [ ] **Langkah 9: Uji Coba Transaksi & Verifikasi Rekap**
 
 ---
 
@@ -120,11 +121,33 @@ DB_NAME=bulk_order_db
 TARGET_BASE_URL=https://api.namaprovider.com/v1
 TARGET_API_KEY=api_key_rahasia
 TARGET_API_SECRET=api_secret_rahasia
+WEBHOOK_PORT=8080
 ```
 
 ---
 
-### Langkah 7: Jalankan Aplikasi
+### Langkah 7: Setup Webhook Callback Asynchronous (Provider & Nginx SSL)
+
+Bot ini mendukung pemrosesan status pesanan `PENDING` yang diselesaikan via webhook callback dari provider (misal FFZ Store API).
+
+1. **Daftarkan URL Callback ke Provider:**
+   Daftarkan endpoint callback bot ke panel provider:
+   `https://<domain_klien>/webhook/callback`
+
+2. **Konfirmasi Header Signature:**
+   Konfirmasi ke provider bahwa header signature dikirim dengan nama `X-Signature`. Bot melakukan verifikasi HMAC-SHA256 dari raw JSON request body menggunakan `TARGET_API_KEY` sebagai secret key.
+
+3. **Setup Reverse Proxy (Nginx) & SSL HTTPS:**
+   Provider mewajibkan callback dikirim ke URL `https://`. Expose port internal bot (`WEBHOOK_PORT`, default: `8080`) melalui reverse proxy seperti Nginx dengan sertifikat SSL (misal Let's Encrypt / Certbot).
+   *Catatan: Konfigurasi domain, Nginx, dan SSL dilakukan manual di level infrastruktur server, bukan bagian dari kode aplikasi.*
+
+> [!NOTE]
+> **Catatan Resiliensi Shutdown:**
+> Selama service restart/deploy, webhook server ikut mati sesaat sehingga callback yang masuk di jendela waktu itu bisa gagal diterima (*connection refused*). Sebelum *go-live*, cek dokumentasi provider: apakah mereka memiliki mekanisme retry untuk callback yang gagal terkirim? Kalau tidak ada mekanisme retry dari provider, jadwalkan deploy/restart di luar jam sibuk transaksi untuk meminimalkan risiko.
+
+---
+
+### Langkah 8: Jalankan Aplikasi
 
 #### Opsi A: Menggunakan Docker Compose (Direkomendasikan untuk Production)
 
@@ -144,7 +167,7 @@ go run ./cmd/bot
 
 ---
 
-### Langkah 8: Uji Coba Transaksi
+### Langkah 9: Uji Coba Transaksi
 
 1. Buka bot di Telegram, kirim:
    ```
