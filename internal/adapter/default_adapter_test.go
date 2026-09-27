@@ -99,8 +99,13 @@ func TestFFZStorePlaceOrderSuccess(t *testing.T) {
 		t.Errorf("status = %s, want %s", res.Status, core.OrderStatusSuccess)
 	}
 
-	if res.SN != "APIKUY_XX_1679528285_4321" {
-		t.Errorf("SN = %s, want APIKUY_XX_1679528285_4321", res.SN)
+	expectedSN := "Nickname - 123456789(1234) . RefId: XX_1679528285_1234"
+	if res.SN != expectedSN {
+		t.Errorf("SN = %s, want %s", res.SN, expectedSN)
+	}
+
+	if res.ProviderRef != "APIKUY_XX_1679528285_4321" {
+		t.Errorf("ProviderRef = %s, want APIKUY_XX_1679528285_4321", res.ProviderRef)
 	}
 }
 
@@ -153,8 +158,12 @@ func TestFFZStorePlaceOrderPending(t *testing.T) {
 func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
 	statusToReturn := "PENDING"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/order/status" || r.URL.Query().Get("trx_id") != "test-trx-123" {
+		if r.URL.Path != "/status/INV-123" {
 			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "test-key" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 
@@ -163,9 +172,9 @@ func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
 			"message":    "Status retrieved",
 			"data": map[string]interface{}{
 				"invoice_number": "INV-123",
-				"trx_id":         "test-trx-123",
+				"trx_id":         nil,
 				"status":         statusToReturn,
-				"response_note":  "Processing in queue",
+				"response_note":  "Nickname - 123456789(1234) . RefId: XX_1679528285_1234",
 			},
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -182,7 +191,7 @@ func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
 	adapter := NewDefaultAdapter(targetCfg, nil, nil)
 
 	// Test 1: PENDING
-	res, supported, err := adapter.CheckStatus(context.Background(), "test-trx-123")
+	res, supported, err := adapter.CheckStatus(context.Background(), "INV-123")
 	if err != nil || !supported {
 		t.Fatalf("unexpected error: %v, supported: %v", err, supported)
 	}
@@ -192,10 +201,13 @@ func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
 	if res.ProviderRef != "INV-123" {
 		t.Errorf("expected ProviderRef INV-123, got %s", res.ProviderRef)
 	}
+	if res.SN != "Nickname - 123456789(1234) . RefId: XX_1679528285_1234" {
+		t.Errorf("expected SN from response_note, got %s", res.SN)
+	}
 
 	// Test 2: PROCESSING
 	statusToReturn = "PROCESSING"
-	res2, supported2, err2 := adapter.CheckStatus(context.Background(), "test-trx-123")
+	res2, supported2, err2 := adapter.CheckStatus(context.Background(), "INV-123")
 	if err2 != nil || !supported2 {
 		t.Fatalf("unexpected error: %v, supported: %v", err2, supported2)
 	}
@@ -205,11 +217,14 @@ func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
 
 	// Test 3: SUCCESS
 	statusToReturn = "SUCCESS"
-	res3, supported3, err3 := adapter.CheckStatus(context.Background(), "test-trx-123")
+	res3, supported3, err3 := adapter.CheckStatus(context.Background(), "INV-123")
 	if err3 != nil || !supported3 {
 		t.Fatalf("unexpected error: %v, supported: %v", err3, supported3)
 	}
 	if res3.Status != core.OrderStatusSuccess {
 		t.Errorf("expected status %s, got %s", core.OrderStatusSuccess, res3.Status)
+	}
+	if res3.SN != "Nickname - 123456789(1234) . RefId: XX_1679528285_1234" {
+		t.Errorf("expected SN from response_note, got %s", res3.SN)
 	}
 }

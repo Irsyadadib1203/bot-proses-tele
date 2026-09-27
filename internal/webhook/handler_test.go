@@ -309,8 +309,12 @@ func TestHandleCallback_Success(t *testing.T) {
 	if updatedItem.Status != store.ItemStatusSuccess {
 		t.Errorf("item status = %s, want %s", updatedItem.Status, store.ItemStatusSuccess)
 	}
-	if updatedItem.SN.String != "APIKUY_XX_1679528285_4321" {
-		t.Errorf("item SN = %s, want APIKUY_XX_1679528285_4321", updatedItem.SN.String)
+	expectedSN := "Nickname - 123456789(1234) . RefId: 1-1"
+	if updatedItem.SN.String != expectedSN {
+		t.Errorf("item SN = %s, want %s", updatedItem.SN.String, expectedSN)
+	}
+	if updatedItem.ProviderRef.String != "APIKUY_XX_1679528285_4321" {
+		t.Errorf("item ProviderRef = %s, want APIKUY_XX_1679528285_4321", updatedItem.ProviderRef.String)
 	}
 }
 

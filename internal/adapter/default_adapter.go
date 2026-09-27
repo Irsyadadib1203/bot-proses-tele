@@ -10,6 +10,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -159,8 +160,12 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 		statusUpper := strings.ToUpper(ffzResp.Data.Status)
 		if (resp.StatusCode == 200 || ffzResp.StatusCode == 200) &&
 			(statusUpper == "SUCCESS" || statusUpper == "PAID" || statusUpper == "PARTIAL_SUCCESS") {
+			sn := ffzResp.Data.ResponseNote
+			if sn == "" {
+				sn = ffzResp.Data.InvoiceNumber
+			}
 			return core.OrderResult{
-				SN:          ffzResp.Data.InvoiceNumber,
+				SN:          sn,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusSuccess,
 				Message:     ffzResp.Data.ResponseNote,
@@ -168,8 +173,12 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 		}
 
 		if statusUpper == "PENDING" {
+			sn := ffzResp.Data.ResponseNote
+			if sn == "" {
+				sn = ffzResp.Data.InvoiceNumber
+			}
 			return core.OrderResult{
-				SN:          ffzResp.Data.InvoiceNumber,
+				SN:          sn,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusPending,
 				Message:     ffzResp.Data.ResponseNote,
@@ -177,7 +186,7 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 		}
 
 		return core.OrderResult{
-			SN:          ffzResp.Data.InvoiceNumber,
+			SN:          ffzResp.Data.ResponseNote,
 			ProviderRef: ffzResp.Data.InvoiceNumber,
 			Status:      core.OrderStatusFailed,
 			Message:     fmt.Sprintf("[%s] %s", ffzResp.Data.Status, ffzResp.Data.ResponseNote),
@@ -198,19 +207,19 @@ func (a *DefaultAdapter) PlaceOrder(ctx context.Context, req core.PlaceOrderRequ
 	}, nil
 }
 
-// CheckStatus verifies the real status of an order on FFZ Store API using trx_id / idempotency key.
-func (a *DefaultAdapter) CheckStatus(ctx context.Context, idempotencyKey string) (core.OrderResult, bool, error) {
+// CheckStatus verifies the real status of an order on FFZ Store API using GET /status/{invoice_number}.
+func (a *DefaultAdapter) CheckStatus(ctx context.Context, invoiceNumber string) (core.OrderResult, bool, error) {
 	if a.isMockMode {
 		return core.OrderResult{
-			SN:          "MOCK-INV-" + idempotencyKey,
-			ProviderRef: "MOCK-REF-" + idempotencyKey,
+			SN:          "MOCK-NOTE-" + invoiceNumber,
+			ProviderRef: invoiceNumber,
 			Status:      core.OrderStatusSuccess,
 			Message:     "Verified via mock check status",
 		}, true, nil
 	}
 
-	// Query status endpoint on FFZ Store API
-	url := fmt.Sprintf("%s/order/status?trx_id=%s", strings.TrimRight(a.cfg.BaseURL, "/"), idempotencyKey)
+	// Query status endpoint on FFZ Store API: GET /status/{invoice_number}
+	url := fmt.Sprintf("%s/status/%s", strings.TrimRight(a.cfg.BaseURL, "/"), url.PathEscape(invoiceNumber))
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return core.OrderResult{}, true, fmt.Errorf("failed to create check status request: %w", err)
@@ -237,9 +246,14 @@ func (a *DefaultAdapter) CheckStatus(ctx context.Context, idempotencyKey string)
 
 	if ffzResp.Data != nil {
 		statusUpper := strings.ToUpper(ffzResp.Data.Status)
+		sn := ffzResp.Data.ResponseNote
+		if sn == "" {
+			sn = ffzResp.Data.InvoiceNumber
+		}
+
 		if statusUpper == "SUCCESS" || statusUpper == "PAID" || statusUpper == "PARTIAL_SUCCESS" {
 			return core.OrderResult{
-				SN:          ffzResp.Data.InvoiceNumber,
+				SN:          sn,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusSuccess,
 				Message:     ffzResp.Data.ResponseNote,
@@ -248,7 +262,7 @@ func (a *DefaultAdapter) CheckStatus(ctx context.Context, idempotencyKey string)
 
 		if statusUpper == "FAILED" || statusUpper == "REFUNDED" {
 			return core.OrderResult{
-				SN:          ffzResp.Data.InvoiceNumber,
+				SN:          sn,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusFailed,
 				Message:     ffzResp.Data.ResponseNote,
@@ -257,7 +271,7 @@ func (a *DefaultAdapter) CheckStatus(ctx context.Context, idempotencyKey string)
 
 		if statusUpper == "PENDING" || statusUpper == "PROCESSING" {
 			return core.OrderResult{
-				SN:          ffzResp.Data.InvoiceNumber,
+				SN:          sn,
 				ProviderRef: ffzResp.Data.InvoiceNumber,
 				Status:      core.OrderStatusPending,
 				Message:     ffzResp.Data.ResponseNote,

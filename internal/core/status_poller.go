@@ -1,4 +1,4 @@
-﻿package core
+package core
 
 import (
 	"context"
@@ -158,8 +158,17 @@ func (p *StatusPoller) syncBatchItems(ctx context.Context, batch *store.BatchOrd
 		default:
 		}
 
+		// Prefer ProviderRef (which stores invoice_number), fallback to IdempotencyKey
+		ref := item.ProviderRef.String
+		if ref == "" {
+			ref = item.IdempotencyKey
+		}
+		if ref == "" {
+			continue
+		}
+
 		itemCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		res, supported, err := p.adapter.CheckStatus(itemCtx, item.IdempotencyKey)
+		res, supported, err := p.adapter.CheckStatus(itemCtx, ref)
 		cancel()
 
 		if !supported {

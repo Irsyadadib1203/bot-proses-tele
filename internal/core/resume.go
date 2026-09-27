@@ -92,7 +92,12 @@ func (r *ResumeManager) handleInProgressItem(ctx context.Context, batch *store.B
 	checkCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
 
-	res, supported, err := r.adapter.CheckStatus(checkCtx, item.IdempotencyKey)
+	ref := item.ProviderRef.String
+	if ref == "" {
+		ref = item.IdempotencyKey
+	}
+
+	res, supported, err := r.adapter.CheckStatus(checkCtx, ref)
 	if !supported {
 		// Provider does not support checking status; mark as needs_manual_review to prevent double-ordering
 		r.logger.Warn("provider does not support CheckStatus; marking item as needs_manual_review",

@@ -261,10 +261,15 @@ func (h *WebhookHandler) HandleCallback(w http.ResponseWriter, r *http.Request) 
 		invoiceNum = item.ProviderRef.String
 	}
 
+	sn := payload.ResponseNote
+	if sn == "" {
+		sn = invoiceNum
+	}
+
 	dbCtx, cancelDB := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelDB()
 
-	if err := h.repo.UpdateItemResult(dbCtx, item.ID, mappedStatus, invoiceNum, invoiceNum, errorMsg); err != nil {
+	if err := h.repo.UpdateItemResult(dbCtx, item.ID, mappedStatus, sn, invoiceNum, errorMsg); err != nil {
 		h.logger.Error("failed to update item result from webhook", "item_id", item.ID, "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
