@@ -1,0 +1,23 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bot
+/bot.exe
+
+# Environment files
+.env
+
+# Test artifacts
+*.out
+*.test
+
+# IDE & OS files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

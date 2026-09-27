@@ -1,0 +1,37 @@
+# Default application configuration for Bulk Order Bot
+telegram:
+  bot_token: "" # Leave empty here and set in .env as TELEGRAM_BOT_TOKEN
+  allowed_user_ids:
+    - 123456789 # Ganti dengan ID Telegram Anda atau set via env ALLOWED_TELEGRAM_USER_IDS
+  rate_limit_per_minute: 10
+
+target:
+  base_url: "https://api.example-provider.com/v1"
+  api_key: ""
+  api_secret: ""
+  timeout_ms: 15000
+
+database:
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: ""
+  dbname: "bulk_order_db"
+  max_open_conns: 25
+  max_idle_conns: 10
+  conn_max_lifetime_seconds: 300
+
+worker:
+  concurrency: 5
+  max_qty_per_batch: 200
+  shutdown_timeout_sec: 30
+
+# Mapping kode produk bot -> kode produk di API target
+products:
+  FF5: "free_fire_5_diamonds"
+  FF50: "free_fire_50_diamonds"
+  FF100: "free_fire_100_diamonds"
+  ML5: "mobile_legends_5_diamonds"
+  ML10: "mobile_legends_10_diamonds"
+  ML50: "mobile_legends_50_diamonds"
+  PUBG60: "pubg_mobile_60_uc"

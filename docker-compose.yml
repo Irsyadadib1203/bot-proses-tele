@@ -1,0 +1,56 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: bulk_order_bot
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - ALLOWED_TELEGRAM_USER_IDS=${ALLOWED_TELEGRAM_USER_IDS}
+      - TARGET_BASE_URL=${TARGET_BASE_URL}
+      - TARGET_API_KEY=${TARGET_API_KEY}
+      - TARGET_API_SECRET=${TARGET_API_SECRET}
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=${DB_USER:-botuser}
+      - DB_PASSWORD=${DB_PASSWORD:-botpassword}
+      - DB_NAME=${DB_NAME:-bulk_order_db}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
+      - MAX_QTY_PER_BATCH=${MAX_QTY_PER_BATCH:-200}
+    volumes:
+      - ./config/config.yaml:/app/config/config.yaml:ro
+    networks:
+      - bot_net
+
+  mysql:
+    image: mysql:8.0
+    container_name: bulk_order_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-bulk_order_db}
+      MYSQL_USER: ${DB_USER:-botuser}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-botpassword}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - bot_net
+
+volumes:
+  mysql_data:
+
+networks:
+  bot_net:
+    driver: bridge
