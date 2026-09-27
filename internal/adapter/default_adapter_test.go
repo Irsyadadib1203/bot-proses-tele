@@ -149,3 +149,67 @@ func TestFFZStorePlaceOrderPending(t *testing.T) {
 		t.Errorf("ProviderRef = %s, want APIKUY_PENDING_9999", res.ProviderRef)
 	}
 }
+
+func TestFFZStoreCheckStatusPendingAndProcessing(t *testing.T) {
+	statusToReturn := "PENDING"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/order/status" || r.URL.Query().Get("trx_id") != "test-trx-123" {
+			http.NotFound(w, r)
+			return
+		}
+
+		resp := map[string]interface{}{
+			"statusCode": 200,
+			"message":    "Status retrieved",
+			"data": map[string]interface{}{
+				"invoice_number": "INV-123",
+				"trx_id":         "test-trx-123",
+				"status":         statusToReturn,
+				"response_note":  "Processing in queue",
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer server.Close()
+
+	targetCfg := config.TargetConfig{
+		BaseURL:   server.URL,
+		APIKey:    "test-key",
+		TimeoutMs: 5000,
+	}
+
+	adapter := NewDefaultAdapter(targetCfg, nil, nil)
+
+	// Test 1: PENDING
+	res, supported, err := adapter.CheckStatus(context.Background(), "test-trx-123")
+	if err != nil || !supported {
+		t.Fatalf("unexpected error: %v, supported: %v", err, supported)
+	}
+	if res.Status != core.OrderStatusPending {
+		t.Errorf("expected status %s, got %s", core.OrderStatusPending, res.Status)
+	}
+	if res.ProviderRef != "INV-123" {
+		t.Errorf("expected ProviderRef INV-123, got %s", res.ProviderRef)
+	}
+
+	// Test 2: PROCESSING
+	statusToReturn = "PROCESSING"
+	res2, supported2, err2 := adapter.CheckStatus(context.Background(), "test-trx-123")
+	if err2 != nil || !supported2 {
+		t.Fatalf("unexpected error: %v, supported: %v", err2, supported2)
+	}
+	if res2.Status != core.OrderStatusPending {
+		t.Errorf("expected status %s, got %s", core.OrderStatusPending, res2.Status)
+	}
+
+	// Test 3: SUCCESS
+	statusToReturn = "SUCCESS"
+	res3, supported3, err3 := adapter.CheckStatus(context.Background(), "test-trx-123")
+	if err3 != nil || !supported3 {
+		t.Fatalf("unexpected error: %v, supported: %v", err3, supported3)
+	}
+	if res3.Status != core.OrderStatusSuccess {
+		t.Errorf("expected status %s, got %s", core.OrderStatusSuccess, res3.Status)
+	}
+}

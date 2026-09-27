@@ -18,6 +18,7 @@ type BotService struct {
 	cfg          *config.Config
 	repo         store.Repository
 	orchestrator *core.Orchestrator
+	poller       *core.StatusPoller
 	rateLimiter  *core.UserRateLimiter
 	logger       *slog.Logger
 	stopCh       chan struct{}
@@ -28,6 +29,7 @@ func NewBotService(
 	cfg *config.Config,
 	repo store.Repository,
 	orchestrator *core.Orchestrator,
+	poller *core.StatusPoller,
 	logger *slog.Logger,
 ) (*BotService, error) {
 	if logger == nil {
@@ -50,6 +52,7 @@ func NewBotService(
 		cfg:          cfg,
 		repo:         repo,
 		orchestrator: orchestrator,
+		poller:       poller,
 		rateLimiter:  rateLimiter,
 		logger:       logger,
 		stopCh:       make(chan struct{}),

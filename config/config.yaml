@@ -26,6 +26,7 @@ worker:
   concurrency: 5
   max_qty_per_batch: 200
   shutdown_timeout_sec: 30
+  poll_interval_sec: 30
 
 webhook_port: "8080"
 

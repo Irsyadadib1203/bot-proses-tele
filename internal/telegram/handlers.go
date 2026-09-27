@@ -35,7 +35,7 @@ func (s *BotService) handleMessage(msg *tgbotapi.Message) {
 		return
 	}
 
-	if strings.HasPrefix(text, "/status") {
+	if strings.HasPrefix(text, "/status") || strings.HasPrefix(text, "/cekstatus") || strings.HasPrefix(text, "/checkstatus") {
 		s.handleStatus(chatID, text)
 		return
 	}
@@ -73,7 +73,7 @@ Contoh:
 • Maksimal per batch: %d item
 • Concurrency worker: %d parallel
 %s
-🔍 Ketik `+"`/status <BATCH_ID>`"+` untuk mengecek status batch yang pernah diproses.`,
+🔍 Ketik `+"`/status`"+` untuk melihat batch aktif, atau `+"`/status <BATCH_ID>`"+` untuk mengecek dan sinkronisasi status batch dari provider.`,
 		s.cfg.Worker.MaxQtyPerBatch,
 		s.cfg.Worker.Concurrency,
 		productList.String(),
@@ -85,7 +85,28 @@ Contoh:
 func (s *BotService) handleStatus(chatID int64, text string) {
 	fields := strings.Fields(text)
 	if len(fields) < 2 {
-		s.sendTextMessage(chatID, "⚠️ Masukkan ID batch.\nContoh: `/status 12`")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		batches, err := s.repo.GetProcessingBatches(ctx)
+		if err != nil {
+			s.sendTextMessage(chatID, fmt.Sprintf("⚠️ Gagal mengambil daftar batch: %v", err))
+			return
+		}
+
+		if len(batches) == 0 {
+			s.sendTextMessage(chatID, "ℹ️ Tidak ada batch yang sedang berjalan saat ini.\n\nGunakan format:\n`/status <BATCH_ID>` untuk mengecek batch tertentu.")
+			return
+		}
+
+		var sb strings.Builder
+		sb.WriteString("📋 **Batch yang Sedang Berjalan:**\n\n")
+		for _, b := range batches {
+			sb.WriteString(fmt.Sprintf("• **Batch #%d** | Produk: `%s` | Target: `%s` | Qty: %d\n  Status: `%s` (Sukses: %d, Gagal: %d)\n",
+				b.ID, b.ProductCode, b.TargetID, b.Qty, b.Status, b.SuccessCount, b.FailedCount))
+		}
+		sb.WriteString("\n🔍 Ketik `/status <BATCH_ID>` untuk memperbarui status langsung dari provider.")
+		s.sendTextMessage(chatID, sb.String())
 		return
 	}
 
@@ -95,7 +116,7 @@ func (s *BotService) handleStatus(chatID int64, text string) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	batch, err := s.repo.GetBatch(ctx, batchID)
@@ -109,7 +130,22 @@ func (s *BotService) handleStatus(chatID int64, text string) {
 		return
 	}
 
-	statusMsg := fmt.Sprintf("📊 **Status Batch #%d**\n\n"+
+	// If batch is currently processing, sync status on-demand with provider
+	if batch.Status == store.BatchStatusProcessing && s.poller != nil {
+		s.sendTextMessage(chatID, fmt.Sprintf("🔄 Mengecek status terbaru Batch #%d ke provider...", batchID))
+		if syncedBatch, syncErr := s.poller.SyncBatch(ctx, batchID); syncErr == nil && syncedBatch != nil {
+			batch = syncedBatch
+		} else if syncErr != nil {
+			s.logger.Warn("on-demand sync batch error", "batch_id", batchID, "err", syncErr)
+		}
+	}
+
+	statusEmoji := "⏳"
+	if batch.Status == store.BatchStatusCompleted {
+		statusEmoji = "✅"
+	}
+
+	statusMsg := fmt.Sprintf("📊 **Status Batch #%d** %s\n\n"+
 		"• Status: `%s`\n"+
 		"• Produk: `%s`\n"+
 		"• Target ID: `%s`\n"+
@@ -119,6 +155,7 @@ func (s *BotService) handleStatus(chatID int64, text string) {
 		"• Review Manual: %d\n"+
 		"• Dibuat: %s",
 		batch.ID,
+		statusEmoji,
 		batch.Status,
 		batch.ProductCode,
 		batch.TargetID,
@@ -128,6 +165,10 @@ func (s *BotService) handleStatus(chatID int64, text string) {
 		batch.ManualReviewCount,
 		batch.CreatedAt.Format("2006-01-02 15:04:05"),
 	)
+
+	if batch.Status == store.BatchStatusProcessing {
+		statusMsg += "\n\n💡 *Batch masih diproses oleh provider. Bot akan otomatis menyelesaikan dan mengirim rekap CSV saat seluruh order tuntas.*"
+	}
 
 	s.sendTextMessage(chatID, statusMsg)
 }

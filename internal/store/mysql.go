@@ -289,6 +289,17 @@ func (r *MySQLRepository) UpdateBatchStatus(ctx context.Context, batchID int64, 
 }
 
 func (r *MySQLRepository) CheckAndCompleteBatch(ctx context.Context, batchID int64) (bool, *BatchOrder, error) {
+	currentBatch, err := r.GetBatch(ctx, batchID)
+	if err != nil {
+		return false, nil, fmt.Errorf("failed to get batch: %w", err)
+	}
+	if currentBatch == nil {
+		return false, nil, fmt.Errorf("batch %d not found", batchID)
+	}
+	if currentBatch.Status == BatchStatusCompleted {
+		return false, currentBatch, nil
+	}
+
 	// Aggregate status counts for this batch
 	row := r.db.QueryRowContext(ctx, `
 		SELECT 
@@ -318,6 +329,6 @@ func (r *MySQLRepository) CheckAndCompleteBatch(ctx context.Context, batchID int
 
 	// Not all items are completed yet, but update intermediate counts
 	_ = r.UpdateBatchStatus(ctx, batchID, BatchStatusProcessing, successCnt, failedCnt, manualCnt, nil)
-	currentBatch, err := r.GetBatch(ctx, batchID)
+	currentBatch, err = r.GetBatch(ctx, batchID)
 	return false, currentBatch, err
 }

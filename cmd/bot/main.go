@@ -100,7 +100,19 @@ func main() {
 		logger,
 	)
 
-	botService, err = telegram.NewBotService(cfg, repo, orchestrator, logger)
+	pollInterval := time.Duration(cfg.Worker.PollIntervalSec) * time.Second
+	if pollInterval <= 0 {
+		pollInterval = 30 * time.Second
+	}
+	statusPoller := core.NewStatusPoller(
+		repo,
+		productAdapter,
+		orchestrator,
+		pollInterval,
+		logger,
+	)
+
+	botService, err = telegram.NewBotService(cfg, repo, orchestrator, statusPoller, logger)
 	if err != nil {
 		logger.Error("failed to initialize telegram bot service", "err", err)
 		os.Exit(1)
@@ -136,7 +148,10 @@ func main() {
 	}
 	cancelResume()
 
-	// 8. Start Telegram Bot Polling
+	// 8. Start Background Periodic Status Poller
+	statusPoller.Start()
+
+	// 9. Start Telegram Bot Polling
 	botService.Start()
 	logger.Info("system is ready and listening for Telegram commands")
 
@@ -157,14 +172,17 @@ func main() {
 	}
 	cancelWebhook()
 
-	// Step C: Stop orchestrator dispatching and wait for in-flight workers to finish HTTP calls & DB saves
+	// Step C: Stop Background Status Poller
+	statusPoller.Stop()
+
+	// Step D: Stop orchestrator dispatching and wait for in-flight workers to finish HTTP calls & DB saves
 	shutdownTimeout := time.Duration(cfg.Worker.ShutdownTimeoutSec) * time.Second
 	if shutdownTimeout <= 0 {
 		shutdownTimeout = 30 * time.Second
 	}
 	orchestrator.Stop(shutdownTimeout)
 
-	// Step D: Close database
+	// Step E: Close database
 	if err := db.Close(); err != nil {
 		logger.Error("error closing database", "err", err)
 	}

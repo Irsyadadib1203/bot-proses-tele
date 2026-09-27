@@ -50,9 +50,10 @@ func (d DatabaseConfig) DSN() string {
 }
 
 type WorkerConfig struct {
-	Concurrency       int `yaml:"concurrency"`         // default: 5
-	MaxQtyPerBatch    int `yaml:"max_qty_per_batch"`   // default: 200
-	ShutdownTimeoutSec int `yaml:"shutdown_timeout_sec"` // default: 30
+	Concurrency        int `yaml:"concurrency"`           // default: 5
+	MaxQtyPerBatch     int `yaml:"max_qty_per_batch"`     // default: 200
+	ShutdownTimeoutSec int `yaml:"shutdown_timeout_sec"`   // default: 30
+	PollIntervalSec    int `yaml:"poll_interval_sec"`      // default: 30 (periodic status poller)
 }
 
 // LoadConfig reads config from yaml file and overrides with environment variables (.env / OS env)
@@ -65,6 +66,7 @@ func LoadConfig(yamlPath string) (*Config, error) {
 			Concurrency:        5,
 			MaxQtyPerBatch:     200,
 			ShutdownTimeoutSec: 30,
+			PollIntervalSec:    30,
 		},
 		Telegram: TelegramConfig{
 			RateLimitPerUser: 10,
@@ -142,6 +144,12 @@ func LoadConfig(yamlPath string) (*Config, error) {
 	if concurrency := os.Getenv("WORKER_CONCURRENCY"); concurrency != "" {
 		if c, err := strconv.Atoi(concurrency); err == nil && c > 0 {
 			cfg.Worker.Concurrency = c
+		}
+	}
+
+	if pollInterval := os.Getenv("POLL_INTERVAL_SEC"); pollInterval != "" {
+		if p, err := strconv.Atoi(pollInterval); err == nil && p > 0 {
+			cfg.Worker.PollIntervalSec = p
 		}
 	}
 

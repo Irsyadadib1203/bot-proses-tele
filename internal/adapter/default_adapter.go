@@ -254,6 +254,15 @@ func (a *DefaultAdapter) CheckStatus(ctx context.Context, idempotencyKey string)
 				Message:     ffzResp.Data.ResponseNote,
 			}, true, nil
 		}
+
+		if statusUpper == "PENDING" || statusUpper == "PROCESSING" {
+			return core.OrderResult{
+				SN:          ffzResp.Data.InvoiceNumber,
+				ProviderRef: ffzResp.Data.InvoiceNumber,
+				Status:      core.OrderStatusPending,
+				Message:     ffzResp.Data.ResponseNote,
+			}, true, nil
+		}
 	}
 
 	return core.OrderResult{

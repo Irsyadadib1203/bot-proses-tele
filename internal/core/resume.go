@@ -144,6 +144,15 @@ func (r *ResumeManager) handleInProgressItem(ctx context.Context, batch *store.B
 			"err", res.Message,
 		)
 		_ = r.repo.UpdateItemResult(ctx, item.ID, store.ItemStatusFailed, res.SN, res.ProviderRef, res.Message)
+	case OrderStatusPending:
+		r.logger.Info("in_progress item still pending at provider, keeping in_progress",
+			"batch_id", batch.ID,
+			"seq", item.SequenceNo,
+			"idempotency_key", item.IdempotencyKey,
+		)
+		if res.ProviderRef != "" {
+			_ = r.repo.UpdateItemProviderRef(ctx, item.ID, res.ProviderRef)
+		}
 	default:
 		// Not yet processed / unknown on provider -> safe to reset to pending for re-execution
 		r.logger.Info("in_progress item not found on provider; resetting to pending for safe processing",

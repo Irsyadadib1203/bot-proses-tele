@@ -115,3 +115,53 @@ func TestResumeManagerSupportedCheckStatusSuccess(t *testing.T) {
 		t.Errorf("expected item status %s, got %s", store.ItemStatusSuccess, item.Status)
 	}
 }
+
+func TestResumeManagerPendingStatusDoesNotReset(t *testing.T) {
+	batch := &store.BatchOrder{
+		ID:          7,
+		ProductCode: "FF5",
+		TargetID:    "12345",
+		Qty:         1,
+		Status:      store.BatchStatusProcessing,
+	}
+
+	items := []*store.BatchOrderItem{
+		{
+			ID:             701,
+			BatchID:        7,
+			SequenceNo:     1,
+			IdempotencyKey: "7-1",
+			Status:         store.ItemStatusInProgress,
+		},
+	}
+
+	repo := newMockRepo(batch, items)
+
+	// Adapter returns supported = true, Status = pending
+	adapter := &mockResumeAdapter{
+		checkStatusFunc: func(ctx context.Context, idempotencyKey string) (OrderResult, bool, error) {
+			return OrderResult{Status: OrderStatusPending, ProviderRef: "REF-7-1"}, true, nil
+		},
+	}
+
+	orch := NewOrchestrator(repo, adapter, 2, nil, nil)
+	defer orch.Stop(1 * time.Second)
+
+	resumeMgr := NewResumeManager(repo, adapter, orch, nil)
+	err := resumeMgr.ResumeUnfinishedBatches(context.Background())
+	if err != nil {
+		t.Fatalf("ResumeUnfinishedBatches failed: %v", err)
+	}
+
+	repo.mu.Lock()
+	item := repo.items[701]
+	repo.mu.Unlock()
+
+	// Item must REMAIN in_progress, NOT reset to pending
+	if item.Status != store.ItemStatusInProgress {
+		t.Errorf("expected item status %s (must not reset to pending), got %s", store.ItemStatusInProgress, item.Status)
+	}
+	if !item.ProviderRef.Valid || item.ProviderRef.String != "REF-7-1" {
+		t.Errorf("expected item provider_ref REF-7-1, got %s", item.ProviderRef.String)
+	}
+}
