@@ -6,10 +6,10 @@ telegram:
   rate_limit_per_minute: 10
 
 target:
-  base_url: "https://api.example-provider.com/v1"
+  base_url: "https://api.ffzstore.com/v1"
   api_key: ""
   api_secret: ""
-  timeout_ms: 15000
+  timeout_ms: 20000
 
 database:
   host: "127.0.0.1"
@@ -26,12 +26,10 @@ worker:
   max_qty_per_batch: 200
   shutdown_timeout_sec: 30
 
-# Mapping kode produk bot -> kode produk di API target
+# Mapping kode produk bot -> kode produk di API FFZ Store
 products:
-  FF5: "free_fire_5_diamonds"
-  FF50: "free_fire_50_diamonds"
-  FF100: "free_fire_100_diamonds"
-  ML5: "mobile_legends_5_diamonds"
-  ML10: "mobile_legends_10_diamonds"
-  ML50: "mobile_legends_50_diamonds"
-  PUBG60: "pubg_mobile_60_uc"
+  ML5: "S1_1187"
+  ML10: "S1_1188"
+  ML50: "S1_1189"
+  FF5: "FF_5_DM"
+  FF50: "FF_50_DM"
