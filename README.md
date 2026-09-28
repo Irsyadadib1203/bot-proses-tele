@@ -21,7 +21,7 @@ Sistem ini didesain dengan pemisahan tegas antara **Core Logic** (generik, tidak
 ├── internal/
 │   ├── adapter/                    # [KHUSUS KLIEN] Implementasi PlaceOrder & CheckStatus
 │   │   └── default_adapter.go
-│   ├── core/                       # [GENERIK] Parser, Worker Pool, Resume Manager, CSV Export
+│   ├── core/                       # [GENERIK] Parser, Worker Pool, Resume Manager, Excel (XLSX) Export
 │   │   ├── adapter.go
 │   │   ├── export.go
 │   │   ├── orchestrator.go
@@ -68,8 +68,8 @@ Sistem ini didesain dengan pemisahan tegas antara **Core Logic** (generik, tidak
    - Item `pending` otomatis diproses ulang.
    - Item `in_progress` diverifikasi via `adapter.CheckStatus(ctx, idempotencyKey)`. Jika provider tidak mendukung pengecekan status, item ditandai `needs_manual_review` agar tidak terjadi transaksi dobel.
 
-6. **Rekap Otomatis via Dokumen CSV:**
-   Setelah semua item selesai, bot otomatis mengirim file `.csv` hasil transaksi (nomor urut, SN, provider ref, status, pesan error) dan rangkuman di caption Telegram.
+6. **Rekap Otomatis via Dokumen Excel (XLSX):**
+   Setelah semua item selesai, bot otomatis mengirim file `.xlsx` hasil transaksi (nomor urut, SN, provider ref, status, pesan error) dan rangkuman di caption Telegram.
 
 7. **Graceful Shutdown:**
    Menunggu worker yang sedang aktif (`in_progress`) menyelesaikan pemanggilan API dan menyimpan data ke database sebelum mematikan aplikasi.

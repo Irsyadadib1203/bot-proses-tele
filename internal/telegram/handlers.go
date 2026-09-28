@@ -167,7 +167,7 @@ func (s *BotService) handleStatus(chatID int64, text string) {
 	)
 
 	if batch.Status == store.BatchStatusProcessing {
-		statusMsg += "\n\n💡 *Batch masih diproses oleh provider. Bot akan otomatis menyelesaikan dan mengirim rekap CSV saat seluruh order tuntas.*"
+		statusMsg += "\n\n💡 *Batch masih diproses oleh provider. Bot akan otomatis menyelesaikan dan mengirim rekap XLSX saat seluruh order tuntas.*"
 	}
 
 	s.sendTextMessage(chatID, statusMsg)

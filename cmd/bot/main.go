@@ -85,7 +85,7 @@ func main() {
 
 	var botService *telegram.BotService
 
-	// Completion callback sends CSV recap to Telegram
+	// Completion callback sends XLSX recap to Telegram
 	completionCallback := func(batch *store.BatchOrder, items []*store.BatchOrderItem) {
 		if botService != nil {
 			botService.SendBatchRecap(batch, items)

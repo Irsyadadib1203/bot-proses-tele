@@ -180,4 +180,4 @@ go run ./cmd/bot
 3. Bot akan membalas langsung:
    `⏳ Batch #1 diterima, memproses 10 order...`
 4. Di background, worker pool memproses secara terkontrol (sesuai `concurrency`).
-5. Setelah selesai, bot mengirimkan dokumen rekap file `.csv` beserta ringkasan status (Sukses/Gagal).
+5. Setelah selesai, bot mengirimkan dokumen rekap file `.xlsx` beserta ringkasan status (Sukses/Gagal).

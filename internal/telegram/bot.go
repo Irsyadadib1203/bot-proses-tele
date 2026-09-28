@@ -98,14 +98,14 @@ func (s *BotService) Stop() {
 	s.logger.Info("telegram bot stopped")
 }
 
-// SendBatchRecap sends the completed batch CSV file and summary caption to the user chat.
+// SendBatchRecap sends the completed batch XLSX file and summary caption to the user chat.
 func (s *BotService) SendBatchRecap(batch *store.BatchOrder, items []*store.BatchOrderItem) {
 	s.logger.Info("sending batch recap to telegram", "batch_id", batch.ID, "chat_id", batch.TelegramChatID)
 
-	csvData, filename, err := core.GenerateRecapCSV(batch, items)
+	xlsxData, filename, err := core.GenerateRecapXLSX(batch, items)
 	if err != nil {
-		s.logger.Error("failed to generate recap csv", "batch_id", batch.ID, "err", err)
-		s.sendTextMessage(batch.TelegramChatID, fmt.Sprintf("⚠️ Gagal membuat file CSV untuk Batch #%d: %v", batch.ID, err))
+		s.logger.Error("failed to generate recap xlsx", "batch_id", batch.ID, "err", err)
+		s.sendTextMessage(batch.TelegramChatID, fmt.Sprintf("⚠️ Gagal membuat file XLSX untuk Batch #%d: %v", batch.ID, err))
 		return
 	}
 
@@ -113,7 +113,7 @@ func (s *BotService) SendBatchRecap(batch *store.BatchOrder, items []*store.Batc
 
 	fileBytes := tgbotapi.FileBytes{
 		Name:  filename,
-		Bytes: csvData,
+		Bytes: xlsxData,
 	}
 
 	docMsg := tgbotapi.NewDocument(batch.TelegramChatID, fileBytes)
@@ -123,7 +123,7 @@ func (s *BotService) SendBatchRecap(batch *store.BatchOrder, items []*store.Batc
 	if _, err := s.bot.Send(docMsg); err != nil {
 		s.logger.Error("failed to send telegram document", "batch_id", batch.ID, "err", err)
 		// Fallback to text message if document sending fails
-		s.sendTextMessage(batch.TelegramChatID, caption+"\n\n⚠️ Catatan: Pengiriman file rekap CSV gagal.")
+		s.sendTextMessage(batch.TelegramChatID, caption+"\n\n⚠️ Catatan: Pengiriman file rekap XLSX gagal.")
 	} else {
 		s.logger.Info("batch recap sent successfully", "batch_id", batch.ID)
 	}
