@@ -125,7 +125,7 @@ func main() {
 
 	webhookPort := cfg.WebhookPort
 	if webhookPort == "" {
-		webhookPort = "8080"
+		webhookPort = "8081"
 	}
 
 	webhookServer := &http.Server{

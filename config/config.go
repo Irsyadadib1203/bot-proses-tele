@@ -82,7 +82,7 @@ func LoadConfig(yamlPath string) (*Config, error) {
 			ConnMaxLifetime: 300,
 		},
 		Products:    make(map[string]string),
-		WebhookPort: "8080",
+		WebhookPort: "8081",
 	}
 
 	if yamlPath != "" {
